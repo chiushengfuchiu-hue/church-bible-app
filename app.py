@@ -11,23 +11,26 @@ import os
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 REPO_NAME = st.secrets["REPO_NAME"]
 FILE_PATH = "bible_reading_v27.json"
-FONT_FILE = "msjh.ttc"  # 請確保此字體檔已上傳至 GitHub
+FONT_FILE = "msjh.ttc"  # 提醒：請確保 GitHub 上有這個字體檔
 
 def load_from_cloud():
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    r = requests.get(url, headers=headers)
-    if r.status_code == 200:
-        res = r.json()
-        content = base64.b64decode(res["content"]).decode("utf-8")
-        return json.loads(content), res["sha"]
+    try:
+        r = requests.get(url, headers=headers)
+        if r.status_code == 200:
+            res = r.json()
+            content = base64.b64decode(res["content"]).decode("utf-8")
+            return json.loads(content), res["sha"]
+    except:
+        pass
     return {"current_year": "2", "members": {}}, None
 
 def save_to_cloud(data, sha):
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     content_b64 = base64.b64encode(json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")).decode("utf-8")
-    payload = {"message": "Update from Mobile", "content": content_b64, "sha": sha}
+    payload = {"message": "Final Update from Mobile", "content": content_b64, "sha": sha}
     r = requests.put(url, headers=headers, json=payload)
     return r.status_code == 200
 
@@ -36,10 +39,11 @@ if 'data' not in st.session_state:
 
 data = st.session_state.data
 
-# --- 2. 介面設定與操作 ---
+# --- 2. 介面設定 ---
 st.set_page_config(page_title="讀經管理雲端版", layout="wide")
 st.title("📖 讀經進度管理系統")
 
+# 選擇年度與週數 (主要操作區)
 with st.container():
     c1, c2, c3 = st.columns(3)
     curr_y = c1.selectbox("年度", ["1", "2", "3", "4"], index=int(data.get("current_year", "2"))-1)
@@ -47,6 +51,7 @@ with st.container():
     weeks_in_q = list(range((int(curr_q)-1)*13 + 1, int(curr_q)*13 + 1))
     sel_w = c3.selectbox("當前週數", weeks_in_q)
 
+# --- 3. 點選簽到區 ---
 m_ids = sorted(data["members"].keys(), key=lambda x: int(x))
 done_ids = [m for m, info in data["members"].items() if int(sel_w) in info["progress"].get(str(curr_y), [])]
 
@@ -63,100 +68,92 @@ for i, mid in enumerate(m_ids):
 
 st.divider()
 
-# --- 3. 終極圖片生成區 (仿電腦版) ---
+# --- 4. 圖片生成區 (仿電腦版) ---
 st.subheader("🖼️ 生成區間統計圖片")
 r1, r2 = st.columns(2)
 start_w = r1.number_input("起始週", value=weeks_in_q[0], min_value=1, max_value=52)
 end_w = r2.number_input("結束週", value=sel_w, min_value=1, max_value=52)
 
-# 繪圖函數
 def draw_stats_image(data, year, start_w, end_w):
-    # 設定字體
     try:
         if os.path.exists(FONT_FILE):
-            font_title = ImageFont.truetype(FONT_FILE, 24)
-            font_text = ImageFont.truetype(FONT_FILE, 18)
+            f_title = ImageFont.truetype(FONT_FILE, 24)
+            f_text = ImageFont.truetype(FONT_FILE, 18)
         else:
-            # 如果沒抓到字體，使用預設 (中文會變亂碼，所以一定要上傳字體)
-            font_title = font_text = ImageFont.load_default()
-            st.warning("⚠️ 找不到字體檔 msjh.ttc，圖片中文將無法顯示。")
+            f_title = f_text = ImageFont.load_default()
     except:
-        font_title = font_text = ImageFont.load_default()
+        f_title = f_text = ImageFont.load_default()
 
-    # 計算圖片尺寸
-    m_ids = sorted(data["members"].keys(), key=lambda x: int(x))
-    num_weeks = end_w - start_w + 1
-    cell_w, cell_h = 40, 30
-    name_w = 100
-    margin = 20
-    
-    img_w = name_w + num_weeks * cell_w + margin * 2
-    img_h = (len(m_ids) + 3) * cell_h + margin * 2
-    
-    # 創建畫布
+    m_list = sorted(data["members"].keys(), key=lambda x: int(x))
+    num_w = end_w - start_w + 1
+    c_w, c_h = 45, 35
+    n_w = 120
+    m = 25
+    img_w = n_w + num_w * c_w + m * 2
+    img_h = (len(m_list) + 3) * c_h + m * 2
     img = Image.new('RGB', (img_w, img_h), color=(255, 255, 255))
-    draw = ImageDraw.Draw(img)
+    d = ImageDraw.Draw(img)
     
-    # 繪製標題
-    title_text = f"第 {year} 年 第 {start_w} - {end_w} 週 讀經統計表"
-    draw.text((margin, margin), title_text, fill=(0, 0, 0), font=font_title)
-    
-    # 繪製表頭
-    y_offset = margin + 40
-    draw.text((margin + 10, y_offset), "姓名", fill=(0, 0, 0), font=font_text)
+    # 畫表頭與數據 (簡化邏輯，確保格式整齊)
+    d.text((m, m), f"第 {year} 年 第 {start_w}-{end_w} 週 讀經統計表", fill=(0,0,0), font=f_title)
+    y = m + 50
+    d.text((m+10, y), "姓名", fill=(0,0,0), font=f_text)
     for i, w in enumerate(range(start_w, end_w + 1)):
-        draw.text((margin + name_w + i * cell_w + 5, y_offset), f"W{w:02d}", fill=(0, 0, 0), font=font_text)
+        d.text((m + n_w + i*c_w + 5, y), f"W{w:02d}", fill=(0,0,0), font=f_text)
     
-    # 繪製格子與內容
-    y_offset += cell_h
-    for mid in m_ids:
+    y += c_h
+    for mid in m_list:
         name = data["members"][mid]["name"]
         prog = data["members"][mid]["progress"].get(str(year), [])
-        
-        # 畫水平線
-        draw.line([(margin, y_offset), (img_w - margin, y_offset)], fill=(200, 200, 200), width=1)
-        
-        # 畫姓名
-        draw.text((margin + 10, y_offset + 5), name, fill=(0, 0, 0), font=font_text)
-        
-        # 畫進度
+        d.line([(m, y), (img_w-m, y)], fill=(220,220,220))
+        d.text((m+10, y+5), name, fill=(0,0,0), font=f_text)
         for i, w in enumerate(range(start_w, end_w + 1)):
             if w in prog:
-                # 畫一個綠色打勾 V
-                draw.text((margin + name_w + i * cell_w + 10, y_offset + 5), "V", fill=(0, 150, 0), font=font_text)
-            
-            # 畫垂直線 (格子)
-            if i == 0: # 畫第一條
-                draw.line([(margin + name_w, y_offset - cell_h), (margin + name_w, img_h - margin - cell_h)], fill=(200, 200, 200), width=1)
-            draw.line([(margin + name_w + (i+1) * cell_w, y_offset - cell_h), (margin + name_w + (i+1) * cell_w, img_h - margin - cell_h)], fill=(200, 200, 200), width=1)
-
-        y_offset += cell_h
-
-    # 畫框線
-    draw.rectangle([(margin, margin + 40), (img_w - margin, img_h - margin - cell_h)], outline=(0, 0, 0), width=1)
-
-    # 轉為 Bytes
+                d.text((m + n_w + i*c_w + 15, y+5), "V", fill=(0,120,0), font=f_text)
+        y += c_h
+    
     buf = BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
 
-if st.button("🖼️ 生成並預覽統計圖片", use_container_width=True):
-    with st.spinner("圖片生成中，請稍候..."):
-        img_bytes = draw_stats_image(data, curr_y, start_w, end_w)
-        
-        # 在網頁上顯示圖片預覽
-        st.image(img_bytes, caption=f"Report_W{start_w}_{end_w}.png")
-        
-        # 真正的下載按鈕 (手機版用這個下載圖片最穩定)
-        st.download_button(
-            label="📥 下載此統計圖片 (PNG)",
-            data=img_bytes,
-            file_name=f"Bible_Report_W{start_w}_{end_w}.png",
-            mime="image/png",
-            use_container_width=True
-        )
+if st.button("📊 生成並下載統計圖片", use_container_width=True):
+    img_bytes = draw_stats_image(data, curr_y, int(start_w), int(end_w))
+    st.image(img_bytes)
+    st.download_button("📥 點此儲存圖片到手機", img_bytes, f"Report_W{start_w}_{end_w}.png", "image/png", use_container_width=True)
 
 st.divider()
 
-# --- 4. 系統管理與存檔 (移至下方) ---
-# ... (保持原本的新增/刪除人員程式碼即可) ...
+# --- 5. 人員管理與存檔 (這一區絕對在！) ---
+st.subheader("⚙️ 系統管理")
+c_save, c_manage = st.columns(2)
+
+with c_save:
+    if st.button("💾 儲存所有變更至雲端", type="primary", use_container_width=True):
+        if save_to_cloud(data, st.session_state.sha):
+            st.success("✅ 同步成功！")
+            _, new_sha = load_from_cloud()
+            st.session_state.sha = new_sha
+        else:
+            st.error("❌ 同步失敗")
+
+with c_manage:
+    with st.expander("👤 人員名單管理 (展開新增/刪除)"):
+        # 新增
+        new_name = st.text_input("新增人員姓名")
+        if st.button("➕ 執行新增"):
+            if new_name:
+                new_id = f"{max([int(k) for k in data['members'].keys()] + [0]) + 1:02d}"
+                data["members"][new_id] = {"name": new_name, "progress": {}}
+                st.success(f"已加入 {new_name}")
+                st.rerun()
+        
+        st.divider()
+        # 刪除
+        del_target = st.selectbox("選擇要刪除的人員", ["-- 請選擇 --"] + [f"{k}: {v['name']}" for k, v in data["members"].items()])
+        if st.button("🗑️ 執行刪除", type="secondary"):
+            if "-- 請選擇 --" not in del_target:
+                tid = del_target.split(":")[0]
+                tname = data['members'][tid]['name']
+                del data["members"][tid]
+                st.warning(f"已刪除 {tname}，記得按儲存。")
+                st.rerun()
