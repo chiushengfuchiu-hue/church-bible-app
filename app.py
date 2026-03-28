@@ -1,4 +1,4 @@
-import streamlit as stimport streamlit as st
+import streamlit as st
 import json
 import base64
 import requests
@@ -111,19 +111,3 @@ with st.expander("👤 人員名單編輯"):
             if del_id in data["members"]:
                 del data["members"][del_id]
                 st.rerun()
-
-import json
-import os
-import pandas as pd
-from PIL import Image, ImageDraw, ImageFont
-from datetime import datetime
-
-# --- 1. 設定與資料處理 ---
-DATA_FILE = "bible_reading_v27.json"
-
-def load_data():
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    # 預設初始資料
-    names = ["程乃珍", "盧正亮", "人峰", "邱文雀", "林淑惠", "翁春祝", "雅雲", "LeeBa22", "鳳姐", "谷哥", "YiHong", "安俐", "彩梅", "劉淑珠", "黃敏生", "林春妙", "yin-pan liang", "蕭慧麗", "蕭健文", "石美莎", "黃然玉", "周寶燕", "吳秀卉", "翁淑美", "妃玉
